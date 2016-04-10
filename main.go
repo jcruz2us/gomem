@@ -4,6 +4,15 @@ import "fmt"
 import "net/http"
 import "log"
 import "time"
+import "runtime"
+import "encoding/json"
+
+func GetMemStats() []byte {
+	mem := runtime.MemStats{}
+	runtime.ReadMemStats(&mem)
+	r, _ := json.Marshal(mem)
+	return r
+}
 
 func main() {
 	http.Handle("/", http.FileServer(http.Dir("./public")))
@@ -30,9 +39,8 @@ func main() {
 
 		ticker := time.NewTicker(time.Millisecond * 2000)
 		go func() {
-			for t := range ticker.C {
-				msg := t.String()
-				messageChan <- []byte(msg)
+			for range ticker.C {
+				messageChan <- GetMemStats()
 			}
 		}()
 

@@ -1,7 +1,7 @@
 console.log('Hello World');
 var es = new EventSource('/profile');
 es.addEventListener('message', function(e) {
-    console.log('message', e);
+    console.log('message', JSON.parse(e.data));
 });
 
 var chart = c3.generate({
