@@ -1,50 +1,121 @@
-console.log('Hello World');
 var es = new EventSource('/profile');
-es.addEventListener('message', function(e) {
-    console.log('message', JSON.parse(e.data));
+
+var state = {
+    memstats: {}
+};
+
+var bytesToString = function(bytes) {
+    var fmt = d3.format('.2f');
+    if (bytes < 1024) {
+        return fmt(bytes) + 'B';
+    } else if (bytes < 1024 * 1024) {
+        return fmt(bytes / 1024) + 'kB';
+    } else if (bytes < 1024 * 1024 * 1024) {
+        return fmt(bytes / 1024 / 1024) + 'MB';
+    } else {
+        return fmt(bytes / 1024 / 1024 / 1024) + 'GB';
+    }
+};
+
+m.mount(document.getElementById("stats"), {
+    controller: function() {
+        var viewModel = {
+            stats: function() {
+                var items = [
+                    'Alloc',
+                    'HeapAlloc',
+                    'HeapIdle',
+                    'HeapInuse',
+                    'HeapSys',
+                    'StackInuse',
+                    'StackSys',
+                    'Sys',
+                    'TotalAlloc'
+                ];
+                var retVal = {};
+                items.forEach(function(item) {
+                    retVal[item] = bytesToString(state.memstats[item]);
+                });
+                return retVal;
+            }
+        };
+        return viewModel;
+    },
+    view: function(ctrl) {
+        var stats = ctrl.stats();
+        return m('div', Object.keys(stats).map(function(key) {
+            return m('div', {
+                key: key
+            }, [
+                m('strong', `${key}:`),
+                m('span', stats[key])
+            ]);
+        }));
+    }
 });
+
 
 var chart = c3.generate({
     bindto: '#chart',
-    history: true,
-    flow: {
-	duration: 100
-    },
     data: {
-	x : 'x',
-	labels: true,
-	columns: [
-	    ['x', new Date().getTime()],
-            ['Austin', Math.floor(Math.random() * 99)],
-            ['New York', Math.floor(Math.random() * 99)],
-            ['San Francisco', Math.floor(Math.random() * 99)],
-            ['Portland', Math.floor(Math.random() * 99)]
-	],
-	types: {
-	    Austin: 'area'
-	}
+        x: 'x',
+        columns: [
+            ['x', new Date().getTime()],
+            ['HeapAlloc', 0],
+            ['HeapSys', 0],
+            ['Sys', 0]
+        ],
+        types: {
+            HeapAlloc: 'area',
+            HeapSys: 'area'
+        }
     },
     axis: {
         x: {
             type: 'timeseries',
             tick: {
-            	format: '%H:%M:%S'
-              }
+                format: '%H:%M:%S'
+            }
+        },
+        y: {
+            tick: {
+                format: bytesToString
+            }
         }
     }
 });
 
-setInterval(function() {
+var heapChart = c3.generate({
+    bindto: '#heap-breakdown',
+    data: {
+        type: 'pie',
+        columns: [
+            ['HeapIdle', 0],
+            ['HeapInuse', 0]
+        ]
+    }
+});
+
+es.addEventListener('message', function(e) {
+    var mem = JSON.parse(e.data);
     chart.flow({
         columns: [
             ['x', new Date().getTime()],
-            ['Austin', Math.floor(Math.random() * 99)],
-            ['New York', Math.floor(Math.random() * 99)],
-            ['San Francisco', Math.floor(Math.random() * 99)],
-            ['Portland', Math.floor(Math.random() * 99)]
-
+            ['HeapAlloc', mem.HeapAlloc],
+            ['HeapSys', mem.HeapSys],
+            ['Sys', mem.Sys]
         ],
-	// Don't pop off any values
-	length: 0
+        // Don't pop off any values
+        length: 0
     });
-}, 2000)
+    heapChart.flow({
+        columns: [
+            ['HeapIdle', mem.HeapIdle],
+            ['HeapInuse', mem.HeapInuse]
+        ]
+    });
+    m.startComputation();
+    state.memstats = mem;
+    m.endComputation();
+    //console.log('message', JSON.parse(e.data));
+});
